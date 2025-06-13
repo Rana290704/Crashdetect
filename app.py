@@ -55,6 +55,7 @@ if not API_KEY:
 @st.cache_resource
 def load_yolo():
     return YOLO("yolov8n.pt")
+
 yolo = load_yolo()
 
 st.title("🚗 Car Crash Detection App")
@@ -76,8 +77,9 @@ def iou(a,b):
     areaA=(a[2]-a[0])*(a[3]-a[1])
     areaB=(b[2]-b[0])*(b[3]-b[1])
     return inter/float(areaA+areaB-inter+1e-6)
+
 def call_ai(blocks):
-    r = requests.post(
+    r=requests.post(
         "https://api.openai.com/v1/chat/completions",
         headers={"Authorization":f"Bearer {API_KEY}","Content-Type":"application/json"},
         json={"model":"gpt-4o","messages":[{"role":"user","content":blocks}],
@@ -88,69 +90,76 @@ def call_ai(blocks):
         return {}
     c=r.json()['choices'][0]['message']['content']
     if isinstance(c,str):
-        try:c=json.loads(c)
+        try: c=json.loads(c)
         except: return {}
     return c if isinstance(c,dict) else {}
 
-# Process video under spinner
-with st.spinner("Analyzing video, please wait..."):
+# Analyze under spinner
+with st.spinner("Analyzing..."):
     cap=cv2.VideoCapture(video_path)
     fps=cap.get(cv2.CAP_PROP_FPS)
     total=int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
-    # Stage 1: detect high-motion peaks & collisions
+    # Stage 1: motion & collision prescreen
     prev=None; scores=[]; colls=[]
-    cap=cv2.VideoCapture(video_path); i=0
+    cap=cv2.VideoCapture(video_path); idx=0
     while True:
         ret,frame=cap.read()
         if not ret: break
-        if i%MOTION_INTERVAL==0:
+        if idx%MOTION_INTERVAL==0:
             g=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
             g=cv2.GaussianBlur(g,(21,21),0)
             if prev is not None:
                 d=cv2.absdiff(prev,g)
-                s=np.sum(d>25)/(frame.shape[0]*frame.shape[1])*100; t=i/fps
+                s=np.sum(d>25)/(frame.shape[0]*frame.shape[1])*100; t=idx/fps
                 scores.append((t,s))
                 res=yolo.predict(frame,imgsz=640,conf=0.3,max_det=10)
                 boxes=[b[:4] for r in res for b in r.boxes.data.tolist() if int(b[5]) in VEHICLE_CLASSES]
                 hit=any(iou(boxes[a],boxes[b])>IOU_COLLISION_THRESH for a in range(len(boxes)) for b in range(a+1,len(boxes)))
                 colls.append((t,hit))
             prev=g
-        i+=1
+        idx+=1
     cap.release()
 
-    # Stage 2: pick events with both high motion and collision
+    # Stage 2: select events
     motion_times=[t for t,s in scores if s>MOTION_THRESHOLD]
     coll_times=[t for t,h in colls if h]
     events=[t for t in motion_times if any(abs(t-c)<DETAILED_SECONDS for c in coll_times)]
-    # enforce minimal gap
-    filtered=[]
+    # minimal gap
+    filt=[]
     for t in sorted(events):
-        if not filtered or t-filtered[-1]>MIN_EVENT_GAP:
-            filtered.append(t)
-    events=filtered
+        if not filt or t-filt[-1]>MIN_EVENT_GAP: filt.append(t)
+    events=filt
 
+    # Stage 3: AI verification & frame capture
     confirmed=[]
-    # Stage 3: for each event, call AI and collect true positives
-    confirmed = []
     for ct in events:
-        # Build minimal blocks (you should replace this with full heatmap+roi+frame blocks)
-        blocks = [
-            {"type":"text","text":"Please respond with only json."},
+        # AI blocks
+        blocks=[
+            {"type":"text","text":"Please respond only with JSON."},
             {"type":"text","text":INVESTIGATOR_PROMPT}
         ]
-        res = call_ai(blocks)
-        # Only count explicit crashes
+        res=call_ai(blocks)
         if res.get('is_crash'):
-            confirmed.append(ct)
+            # grab frame at impact
+            impact_idx=int(ct*fps)
+            cap2=cv2.VideoCapture(video_path)
+            cap2.set(cv2.CAP_PROP_POS_FRAMES,impact_idx)
+            ok,frm=cap2.read()
+            cap2.release()
+            if ok:
+                confirmed.append((ct,frm))
+            else:
+                confirmed.append((ct,None))
+        time.sleep(API_CALL_DELAY_SECONDS)
 
-# Final output: only summary
+# Final display
 st.header("📊 Crash Detection Results")
 if confirmed:
-    st.success(
-        f"Detected {len(confirmed)} crash(es) at times (s): " +
-        ", ".join(f"{t:.2f}" for t in confirmed)
-    )
+    for t,frm in confirmed:
+        st.markdown(f"**Crash at {t:.2f}s**")
+        if frm is not None:
+            st.image(cv2.cvtColor(frm,cv2.COLOR_BGR2RGB), use_column_width=True)
 else:
     st.info("No crashes confirmed in the video.")
