@@ -1,4 +1,3 @@
-
 import os
 import tempfile
 import base64
@@ -22,6 +21,29 @@ DETAILED_FPS             = 12
 MAX_SEND_FRAMES          = 8
 IOU_COLLISION_THRESH     = 0.02
 VEHICLE_CLASSES          = {2, 3, 5, 7}  # car, motorcycle, bus, truck
+
+# Investigator prompt (must be defined before use)
+INVESTIGATOR_PROMPT = """
+You are an expert accident investigator. You will be given:
+
+1. A global motion heatmap (6s clip) showing all movement intensity.
+2. A cropped ROI heatmap of the single highest-motion area.
+3. A collision mask image highlighting overlapping vehicle regions (if any).
+4. Up to eight video frames from that period.
+
+Your job is to decide if a real car crash occurred.
+– Crashes show abrupt, concentrated spikes in motion AND visible vehicle deformation or overlap.
+– Non-crashes (passing cars, camera pans) look smooth, uniform, or only minor overlaps.
+
+**If you are uncertain based on the evidence, you MUST assume a crash occurred.**
+
+**Respond ONLY with valid json** in this EXACT schema:
+{
+  "is_crash": bool,
+  "impact_frame_index": int or null,
+  "reasoning": "one-sentence justification referencing your evidence"
+}
+"""
 
 # Load models & API key
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -69,10 +91,11 @@ def perform_ai_verification(blocks):
 
 if uploader:
     # Save uploaded video to temp file
-    tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    tfile = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploader.name)[1])
     tfile.write(uploader.read())
     video_path = tfile.name
 
+    # Read video
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -81,7 +104,7 @@ if uploader:
     st.info(f"Loaded video: {fps:.1f} FPS, {total_frames} frames")
     progress = st.progress(0)
 
-    # 1) Prescreen: motion & collision
+    # 1) Prescreen: motion & collisions
     prev_gray = None
     raw_scores, raw_collisions = [], []
     cap = cv2.VideoCapture(video_path)
@@ -108,7 +131,7 @@ if uploader:
         progress.progress(min(idx/total_frames, 1.0))
     cap.release()
 
-    # 2) Determine event times
+    # 2) Determine events
     peaks = [raw_scores[i][0] for i in range(1, len(raw_scores)-1)
              if raw_scores[i][1] > raw_scores[i-1][1]
              and raw_scores[i][1] > raw_scores[i+1][1]
@@ -123,12 +146,14 @@ if uploader:
 
     if not events:
         st.success("No candidate events detected.")
+        st.stop()
     else:
         st.success(f"Detected {len(events)} candidate events.")
 
     confirmed = []
+    # 3) Detailed analysis
     for ei, center_t in enumerate(events):
-        st.write(f"Analyzing event {ei+1}/{len(events)} at {center_t:.2f}s...")
+        st.write(f"### Event {ei+1} at {center_t:.2f}s")
         start = max(0, center_t - DETAILED_SECONDS/2)
         sf = int(start * fps)
 
@@ -199,12 +224,12 @@ if uploader:
         else:
             coll_b64 = None
 
-        # Video frames
+        # Display sample frames
         st.write("Sample frames:")
         for s in smalls[:MAX_SEND_FRAMES]:
             st.image(cv2.cvtColor(s, cv2.COLOR_BGR2RGB))
 
-        # Build blocks
+        # Build blocks for AI
         blocks = [
             {"type":"text","text":"Please respond in valid json format."},
             {"type":"text","text":INVESTIGATOR_PROMPT},
@@ -218,33 +243,4 @@ if uploader:
             ]
         if coll_b64:
             blocks += [
-                {"type":"text","text":"--- Collision Mask ---"},
-                {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{coll_b64}","detail":"low"}}
-            ]
-        blocks += [{"type":"text","text":"--- Video Frames ---"}]
-        for s in smalls[:MAX_SEND_FRAMES]:
-            _, bf = cv2.imencode(".jpg", s, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-            b64 = base64.b64encode(bf.tobytes()).decode()
-            blocks.append({"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}","detail":"low"}})
-
-        # AI call
-        result = perform_ai_verification(blocks)
-        if 'is_crash' not in result:
-            st.warning("Unexpected API response, defaulting to crash.")
-            result = {"is_crash": True, "impact_frame_index": None, "reasoning": "fallback"}
-
-        st.write(f"**AI verdict:** {result['is_crash']} – {result['reasoning']}")
-        if result['is_crash']:
-            imp = result.get('impact_frame_index') or 0
-            confirmed.append((start + imp/DETAILED_FPS, raw_frames[imp]))
-
-        if ei < len(events)-1:
-            time.sleep(API_CALL_DELAY_SECONDS)
-
-    st.header("Final Report")
-    if confirmed:
-        for t, frm in confirmed:
-            st.write(f"Crash at ~{t:.2f}s")
-            st.image(cv2.cvtColor(frm, cv2.COLOR_BGR2RGB))
-    else:
-        st.success("No crashes confirmed.")
+                {"type":"text","text":"---
