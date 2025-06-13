@@ -154,15 +154,3 @@ if confirmed:
     )
 else:
     st.info("No crashes confirmed in the video.")
-st.header("📊 Crash Detection Results")
-if confirmed:
-    st.success(f"Detected {len(confirmed)} crash(es) at times (s): {', '.join(f'{t:.2f}' for t,_ in confirmed)}")
-else:
-    st.info("No crashes confirmed in the video.")
-st.header("Results")
-if conf:
-    for t,frm in conf:
-        st.write(f"🚨 Crash @ {t:.2f}s")
-        st.image(cv2.cvtColor(frm,cv2.COLOR_BGR2RGB))
-else:
-    st.success("No crashes confirmed.")
