@@ -132,17 +132,28 @@ with st.spinner("Analyzing video, please wait..."):
     events=filtered
 
     confirmed=[]
-    # Stage 3: for each event, run detailed AI only
+    # Stage 3: for each event, call AI and collect true positives
+    confirmed = []
     for ct in events:
-        # prepare motion heatmap, ROI, frames (omitted for brevity)
-        # build blocks with INVESTIGATOR_PROMPT and images
-        blocks=[{"type":"text","text":"Please respond in valid json format."},
-                {"type":"text","text":INVESTIGATOR_PROMPT}]
-        res=call_ai(blocks)
-        if 'is_crash' in res and res['is_crash']:
-            confirmed.append((ct,res.get('impact_frame_index',0)))
+        # Build minimal blocks (you should replace this with full heatmap+roi+frame blocks)
+        blocks = [
+            {"type":"text","text":"Please respond with only json."},
+            {"type":"text","text":INVESTIGATOR_PROMPT}
+        ]
+        res = call_ai(blocks)
+        # Only count explicit crashes
+        if res.get('is_crash'):
+            confirmed.append(ct)
 
-# Final output
+# Final output: only summary
+st.header("📊 Crash Detection Results")
+if confirmed:
+    st.success(
+        f"Detected {len(confirmed)} crash(es) at times (s): " +
+        ", ".join(f"{t:.2f}" for t in confirmed)
+    )
+else:
+    st.info("No crashes confirmed in the video.")
 st.header("📊 Crash Detection Results")
 if confirmed:
     st.success(f"Detected {len(confirmed)} crash(es) at times (s): {', '.join(f'{t:.2f}' for t,_ in confirmed)}")
