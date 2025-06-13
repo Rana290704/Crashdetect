@@ -243,4 +243,34 @@ if uploader:
             ]
         if coll_b64:
             blocks += [
-                {"type":"text","text":"---
+                {"type":"text","text":"--- Collision Mask ---"},
+                {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{coll_b64}","detail":"low"}}
+            ]
+        blocks += [{"type":"text","text":"--- Video Frames ---"}]
+        for s in smalls[:MAX_SEND_FRAMES]:
+            _, bf = cv2.imencode(".jpg", s, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+            b64 = base64.b64encode(bf.tobytes()).decode()
+            blocks.append({"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}","detail":"low"}})
+
+        # AI verification
+        result = perform_ai_verification(blocks)
+        if 'is_crash' not in result:
+            st.warning("Unexpected API response, defaulting to crash.")
+            result = {"is_crash": True, "impact_frame_index": None, "reasoning": "fallback"}
+
+        st.write(f"**AI verdict:** {result['is_crash']} – {result['reasoning']}")
+        if result['is_crash']:
+            imp = result.get('impact_frame_index') or 0
+            confirmed.append((start + imp/DETAILED_FPS, raw_frames[imp]))
+
+        if ei < len(events)-1:
+            time.sleep(API_CALL_DELAY_SECONDS)
+
+    # Final report
+    st.header("Final Report")
+    if confirmed:
+        for t, frm in confirmed:
+            st.write(f"🚨 Crash @ {t:.2f}s")
+            st.image(cv2.cvtColor(frm, cv2.COLOR_BGR2RGB))
+    else:
+        st.success("No crashes confirmed.")
