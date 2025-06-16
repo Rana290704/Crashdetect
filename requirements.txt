@@ -1,13 +1,13 @@
 # Streamlit and other dependencies
-streamlit==1.19.0
+streamlit
 
 # OpenCV without GUI dependencies (headless)
-opencv-python-headless==4.5.1.48  # Use headless version of OpenCV
+opencv-python-headless  # Use headless version of OpenCV
 
 # PyTorch and other dependencies
-torch==2.0.1
-numpy==1.24.1
-requests==2.28.2
-pygments==2.19.1
-markdown-it-py==3.0.0
-rich==14.0.0
+torch
+numpy
+requests
+pygments
+markdown-it-py
+rich
