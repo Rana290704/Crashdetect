@@ -1,24 +1,21 @@
 # Streamlit for the web app
 streamlit==1.19.0
 
-# Pillow for image processing
-Pillow==9.3.0  # For handling image files like .jpg, .png
-
-# imageio for reading video files
-imageio==2.9.0  # For handling video file formats (.mp4, .avi, etc.)
+# Precompiled Pillow for image processing
+Pillow==9.3.0  # Use a precompiled version of Pillow
 
 # OpenCV for headless environments (no GUI dependencies)
-opencv-python-headless==4.5.1.48  # OpenCV without GUI dependencies
+opencv-python-headless==4.5.1.48
 
 # PyTorch for AI model operations (YOLO)
-torch==2.0.1  # PyTorch (ensure compatibility with your environment)
+torch==2.0.1
 
 # YOLO model
 ultralytics==8.0.31  # Ensure this version is compatible with your environment
 
 # Other dependencies
-numpy==1.24.1  # For numerical operations (used by imageio, ultralytics, etc.)
-requests==2.28.2  # For making HTTP requests (used for API calls)
-pygments==2.19.1  # For syntax highlighting
-markdown-it-py==3.0.0  # For markdown processing
-rich==14.0.0  # For rich text and progress bars in Streamlit
+numpy==1.24.1
+requests==2.28.2
+pygments==2.19.1
+markdown-it-py==3.0.0
+rich==14.0.0
