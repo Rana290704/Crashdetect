@@ -56,7 +56,7 @@ def load_yolo():
 yolo = load_yolo()
 
 st.title("🚗 Car Crash Detection App")
-video_file = st.file_uploader("Upload a video file", type=["mp4","mov","avi"])
+video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 if not video_file:
     st.info("Upload a video to begin.")
     st.stop()
@@ -68,29 +68,31 @@ tmp.write(video_file.read())
 video_path = tmp.name
 
 # Utility: IoU
-def iou(a,b):
-    xA,yA = max(a[0],b[0]), max(a[1],b[1])
-    xB,yB = min(a[2],b[2]), min(a[3],b[3])
-    inter = max(0,xB-xA)*max(0,yB-yA)
-    areaA=(a[2]-a[0])*(a[3]-a[1])
-    areaB=(b[2]-b[0])*(b[3]-b[1])
-    return inter/float(areaA+areaB-inter+1e-6)
+def iou(a, b):
+    xA, yA = max(a[0], b[0]), max(a[1], b[1])
+    xB, yB = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0, xB - xA) * max(0, yB - yA)
+    areaA = (a[2] - a[0]) * (a[3] - a[1])
+    areaB = (b[2] - b[0]) * (b[3] - b[1])
+    return inter / float(areaA + areaB - inter + 1e-6)
 
 # Call AI with JSON response
 def call_ai(blocks):
     resp = requests.post(
         "https://api.openai.com/v1/chat/completions",
-        headers={"Authorization":f"Bearer {API_KEY}","Content-Type":"application/json"},
-        json={"model":"gpt-4o","messages":[{"role":"user","content":blocks}],
-              "response_format":{"type":"json_object"},"max_tokens":300}
+        headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": blocks}],
+              "response_format": {"type": "json_object"}, "max_tokens": 300}
     )
     if resp.status_code != 200:
         return {}
     content = resp.json()['choices'][0]['message']['content']
-    if isinstance(content,str):
-        try: content = json.loads(content)
-        except: return {}
-    return content if isinstance(content,dict) else {}
+    if isinstance(content, str):
+        try:
+            content = json.loads(content)
+        except:
+            return {}
+    return content if isinstance(content, dict) else {}
 
 # Analyze under spinner
 with st.spinner("Analyzing video..."):
@@ -106,29 +108,30 @@ with st.spinner("Analyzing video..."):
     idx = 0
     while True:
         ret, frame = cap.read()
-        if not ret: break
+        if not ret:
+            break
         if idx % MOTION_INTERVAL == 0:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            gray = cv2.GaussianBlur(gray,(21,21),0)
+            gray = cv2.GaussianBlur(gray, (21, 21), 0)
             if prev_gray is not None:
                 delta = cv2.absdiff(prev_gray, gray)
-                score = np.sum(delta>25)/(frame.shape[0]*frame.shape[1])*100
+                score = np.sum(delta > 25) / (frame.shape[0] * frame.shape[1]) * 100
                 t = idx / fps
-                scores.append((t,score))
+                scores.append((t, score))
                 # YOLO collision detect
-                res = yolo.predict(frame,imgsz=640,conf=0.3,max_det=10)
+                res = yolo.predict(frame, imgsz=640, conf=0.3, max_det=10)
                 boxes = [b[:4] for r in res for b in r.boxes.data.tolist() if int(b[5]) in VEHICLE_CLASSES]
-                hit = any(iou(boxes[i],boxes[j])>IOU_COLLISION_THRESH
-                          for i in range(len(boxes)) for j in range(i+1,len(boxes)))
-                collisions.append((t,hit))
+                hit = any(iou(boxes[i], boxes[j]) > IOU_COLLISION_THRESH
+                          for i in range(len(boxes)) for j in range(i + 1, len(boxes)))
+                collisions.append((t, hit))
             prev_gray = gray
         idx += 1
     cap.release()
 
     # Stage 2: pick events where motion & collision coincide
-    high_motion = [t for t,s in scores if s> MOTION_THRESHOLD]
-    coll_times = [t for t,h in collisions if h]
-    events = [t for t in high_motion if any(abs(t-c)<DETAILED_SECONDS for c in coll_times)]
+    high_motion = [t for t, s in scores if s > MOTION_THRESHOLD]
+    coll_times = [t for t, h in collisions if h]
+    events = [t for t in high_motion if any(abs(t - c) < DETAILED_SECONDS for c in coll_times)]
     # enforce gap
     filtered = []
     for t in sorted(events):
@@ -141,44 +144,45 @@ with st.spinner("Analyzing video..."):
     for ct in events:
         # Generate motion heatmap
         cap = cv2.VideoCapture(video_path)
-        start_frame = int(max(0,(ct - DETAILED_SECONDS/2)*fps))
+        start_frame = int(max(0, (ct - DETAILED_SECONDS / 2) * fps))
         cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
         acc = None
         prev_g = None
-        for _ in range(int(DETAILED_SECONDS*fps)):
+        for _ in range(int(DETAILED_SECONDS * fps)):
             ok, frm = cap.read()
-            if not ok: break
+            if not ok:
+                break
             gray = cv2.cvtColor(frm, cv2.COLOR_BGR2GRAY)
-            gray = cv2.GaussianBlur(gray,(21,21),0)
+            gray = cv2.GaussianBlur(gray, (21, 21), 0)
             if prev_g is not None:
                 diff = cv2.absdiff(prev_g, gray)
                 acc = diff if acc is None else acc + diff
             prev_g = gray
         cap.release()
         # create heatmap image
-        hm_norm = cv2.normalize(acc,None,0,255,cv2.NORM_MINMAX).astype(np.uint8)
-        hm_img = cv2.applyColorMap(hm_norm,cv2.COLORMAP_JET)
+        hm_norm = cv2.normalize(acc, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        hm_img = cv2.applyColorMap(hm_norm, cv2.COLORMAP_JET)
         _, hm_buf = cv2.imencode('.jpg', hm_img)
         hm_b64 = base64.b64encode(hm_buf.tobytes()).decode()
         # grab impact frame
-        frame_idx = int(ct*fps)
+        frame_idx = int(ct * fps)
         cap2 = cv2.VideoCapture(video_path)
         cap2.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
         ok, impact_frame = cap2.read()
         cap2.release()
         frame_b64 = ''
         if ok:
-            _, fr_buf = cv2.imencode('.jpg', impact_frame, [int(cv2.IMWRITE_JPEG_QUALITY),JPEG_QUALITY])
+            _, fr_buf = cv2.imencode('.jpg', impact_frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
             frame_b64 = base64.b64encode(fr_buf.tobytes()).decode()
 
         # build AI blocks
         blocks = []
-        blocks.append({"type":"text","text":INVESTIGATOR_PROMPT})
-        blocks.append({"type":"text","text":"--- Motion Heatmap ---"})
-        blocks.append({"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{hm_b64}","detail":"low"}})
+        blocks.append({"type": "text", "text": INVESTIGATOR_PROMPT})
+        blocks.append({"type": "text", "text": "--- Motion Heatmap ---"})
+        blocks.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{hm_b64}", "detail": "low"}})
         if frame_b64:
-            blocks.append({"type":"text","text":"--- Impact Frame ---"})
-            blocks.append({"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{frame_b64}","detail":"low"}})
+            blocks.append({"type": "text", "text": "--- Impact Frame ---"})
+            blocks.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{frame_b64}", "detail": "low"}})
 
         res = call_ai(blocks)
         if res.get('is_crash'):
@@ -191,6 +195,7 @@ if confirmed:
     for t, frm in confirmed:
         st.markdown(f"**Crash at {t:.2f}s**")
         if frm is not None:
-            st.image(cv2.cvtColor(frm,cv2.COLOR_BGR2RGB), use_container_width=True)
+            # Display impact frame with Streamlit (replaces cv2.imshow)
+            st.image(cv2.cvtColor(frm, cv2.COLOR_BGR2RGB), use_container_width=True)
 else:
     st.info("No crashes confirmed in the video.")
