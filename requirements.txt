@@ -1,21 +1,6 @@
-# Streamlit for the web app
-streamlit==1.19.0
-
-# Precompiled Pillow for image processing
-Pillow==9.3.0  # Use a precompiled version of Pillow
-
-# OpenCV for headless environments (no GUI dependencies)
-opencv-python-headless==4.5.1.48
-
-# PyTorch for AI model operations (YOLO)
-torch==2.0.1
-
-# YOLO model
-ultralytics==8.0.31  # Ensure this version is compatible with your environment
-
-# Other dependencies
-numpy==1.24.1
-requests==2.28.2
-pygments==2.19.1
-markdown-it-py==3.0.0
-rich==14.0.0
+streamlit
+ultralytics
+opencv-python-headless
+numpy
+requests
+cv2
