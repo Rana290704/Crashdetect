@@ -38,8 +38,7 @@ Respond ONLY with valid JSON in this schema:
 {
   "is_crash": bool,
   "impact_frame_index": int or null,
-  "reasoning": "one-sentence justification",
-  "accuracy": float  # New field for accuracy
+  "reasoning": "one-sentence justification"
 }
 """
 
@@ -82,7 +81,8 @@ def call_ai(blocks):
     resp = requests.post(
         "https://api.openai.com/v1/chat/completions",
         headers={"Authorization":f"Bearer {API_KEY}","Content-Type":"application/json"},
-        json={"model":"gpt-4o","messages":[{"role":"user","content":blocks}]}  # Remove response_format
+        json={"model":"gpt-4o","messages":[{"role":"user","content":blocks}],
+              "response_format":{"type":"json_object"},"max_tokens":300}
     )
     if resp.status_code != 200:
         return {}
@@ -182,22 +182,15 @@ with st.spinner("Analyzing video..."):
 
         res = call_ai(blocks)
         if res.get('is_crash'):
-            confirmed.append((ct, impact_frame, res.get('accuracy')))
+            confirmed.append((ct, impact_frame))
         time.sleep(API_CALL_DELAY_SECONDS)
 
 # Final display
 st.header("📊 Crash Detection Results")
 if confirmed:
-    for t, frm, accuracy in confirmed:
+    for t, frm in confirmed:
         st.markdown(f"**Crash at {t:.2f}s**")
-        st.markdown(f"**Accuracy: {accuracy:.2f}%**")
-        
-        # Highlight accident area (rectangle)
         if frm is not None:
-            # Example: Draw a rectangle on the frame (you need to define accident area coordinates)
-            # Here I am assuming a placeholder rectangle; replace it with actual accident area
-            accident_area = (100, 100, 400, 400)  # Example: (x1, y1, x2, y2)
-            cv2.rectangle(frm, (accident_area[0], accident_area[1]), (accident_area[2], accident_area[3]), (0, 255, 0), 3)
             st.image(cv2.cvtColor(frm,cv2.COLOR_BGR2RGB), use_container_width=True)
 else:
     st.info("No crashes confirmed in the video.")
