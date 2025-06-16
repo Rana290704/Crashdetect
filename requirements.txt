@@ -1,6 +1,21 @@
-streamlit
-ultralytics
-opencv-python-headless
-numpy
-requests
-cv2
+# General dependencies for the app
+streamlit==1.19.0
+opencv-python-headless==4.5.1.48  # OpenCV for headless environments (no GUI dependencies)
+torch==2.0.1  # PyTorch for AI model operations
+
+# Additional dependencies
+numpy==1.24.1  # Essential for handling numerical arrays
+requests==2.28.2  # For HTTP requests (used for API calls)
+pyyaml==6.0  # For YAML parsing (if needed for configuration)
+pillow==9.3.0  # For image handling
+matplotlib==3.6.3  # For image display and visualization in Streamlit
+scipy==1.9.3  # SciPy for numerical methods
+
+# Other dependencies for handling markdown and rich-text formatting
+pygments==2.19.1
+mdurl==0.1.2
+markdown-it-py==3.0.0
+rich==14.0.0
+
+# For AI integration and various utilities
+openai==0.27.0  # OpenAI for integrating GPT model API calls
